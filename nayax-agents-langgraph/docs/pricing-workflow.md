@@ -65,12 +65,25 @@ En LangGraph Studio, el input equivalente es:
 {"supplier_id":"cashoreca","provider_source":"catalog"}
 ```
 
+Sin `supplier_id`, el grafo compara automáticamente todos los proveedores que
+tengan productos vigentes en el catálogo local:
+
+```json
+{"provider_source":"catalog"}
+```
+
+La fuente `api` requiere un proveedor explícito, porque no todos los
+proveedores disponen de integración API.
+
 Después el comando:
 
 1. Actualiza el snapshot API o usa el catálogo de facturas, según su fuente.
 2. Obtiene `ProductName` y `MachinePrice` de todas las máquinas Nayax.
 3. Ejecuta matching con EAN, atributos normalizados y fuzzy conservador.
 4. Genera un XLSX por máquina y proveedor en `reports/...`.
+
+Los informes nuevos se nombran como
+`proveedor-nombre-maquina-DD_MM_YYYY_HH:MM.xlsx`, con hora local de Madrid.
 
 Cada libro incluye `Comparación`, `Sin match`, `Resumen` y `Parámetros`. Los
 productos sin match, sin NayaxProductID o sin `MachinePrice` se incluyen y no

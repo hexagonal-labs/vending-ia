@@ -1,10 +1,11 @@
+import base64
 from decimal import Decimal
 from pathlib import Path
 
 from pytest import MonkeyPatch, raises
 
 from invoice_bridge import core
-from invoice_bridge.core import extract, parse_cashoreca
+from invoice_bridge.core import extract, parse_cashoreca, revise_invoice
 from invoice_bridge.vision import VisionInvoice
 
 
@@ -29,6 +30,17 @@ def test_archive_source_is_idempotent_and_owned_by_invoice_bridge(tmp_path: Path
     archive = Path(str(first["sourceUri"]))
     assert archive.parent == tmp_path / "invoice-bridge-data" / "uploads"
     assert archive.read_bytes() == b"invoice-original"
+
+
+def test_uploaded_source_is_archived_without_a_client_filesystem_path(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("INVOICE_DATA_DIR", str(tmp_path / "invoice-bridge-data"))
+
+    uploaded = core.store_uploaded_source("Factura julio.pdf", base64.b64encode(b"invoice-original").decode())
+
+    archived = Path(str(uploaded["sourceUri"]))
+    assert archived.parent == tmp_path / "invoice-bridge-data" / "uploads"
+    assert archived.name.endswith("Factura-julio.pdf")
+    assert archived.read_bytes() == b"invoice-original"
 
 
 def test_invalid_total_requires_review() -> None:
@@ -159,3 +171,33 @@ def test_vision_with_only_ambiguous_lines_requires_review(tmp_path: Path, monkey
 
     assert result.status == "REVIEW_REQUIRED"
     assert result.lines[0].validation_status == "REVIEW_REQUIRED"
+
+
+def test_human_correction_revalidates_the_entire_invoice() -> None:
+    invoice = {
+        "contractVersion": "supplier-invoice-ingestion/v1",
+        "providerId": "cashoreca",
+        "sourceHash": "a" * 64,
+        "ingestedAt": "2026-09-05T17:00:00+00:00",
+        "status": "REVIEW_REQUIRED",
+        "lines": [
+            {
+                "rawDescription": "AMERICA PANELA REDONDA 454GR",
+                "purchaseQuantity": "1",
+                "priceScope": "unknown",
+                "packExpression": None,
+                "unitsPerPack": None,
+                "packPriceNet": "1.41",
+                "lineTotalNet": "1.41",
+                "vatRate": "0.1",
+                "validationStatus": "REVIEW_REQUIRED",
+                "validationReason": "No se han podido determinar las unidades por pack.",
+            }
+        ],
+    }
+
+    revised = revise_invoice(invoice, [{"lineIndex": 0, "unitsPerPack": "1", "packExpression": "1*1"}])
+
+    assert revised.status == "EXTRACTED"
+    assert revised.lines[0].validation_status == "VALID"
+    assert revised.lines[0].units_per_pack == Decimal("1")

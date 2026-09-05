@@ -79,6 +79,7 @@ Desde `nayax-agents-langgraph`:
 
 ```bash
 docker volume create pricing-catalog-data
+docker volume create invoice-bridge-data
 docker compose --env-file .env.docker build
 docker compose --env-file .env.docker up -d
 ```
@@ -103,8 +104,57 @@ docker compose --env-file .env.docker down
 ```
 
 Los checkpoints se guardan en el volumen Docker `langgraph-data`. El catálogo
-de proveedores usa el volumen externo `pricing-catalog-data`, compartido con
-el cargador temporal de facturas, y ambos sobreviven al reinicio del contenedor.
+de proveedores usa el volumen externo `pricing-catalog-data` y los originales
+de factura el volumen externo `invoice-bridge-data`; ambos sobreviven al
+reinicio del contenedor y se comparten con `invoice-upload-test`.
+
+Los Excel visibles para el equipo se exportan automáticamente al propio proyecto:
+
+```text
+reports/catalogos/<proveedor>/catalog.xlsx
+reports/comparaciones/<proveedor>/<informe-por-máquina>.xlsx
+```
+
+Son copias de solo salida del catálogo persistente del bridge. Se actualizan
+después de importar una factura, registrar un catálogo desde la API de un
+proveedor o generar una comparación de pricing. Estas salidas locales están
+excluidas de Git.
+
+## Carga de facturas por LangGraph
+
+Studio muestra el grafo `invoice` y permite probar la revisión por thread. El
+input tiene dos alternativas excluyentes:
+
+- `source_uri`: ruta que ya exista dentro del contenedor, por ejemplo un
+  original en `/var/lib/invoice-bridge/uploads/...`.
+- `filename` y `content_base64`: un frontend o canal de chat codifica el PDF o
+  imagen en Base64 y lo envía al grafo. Es la vía destinada a los empleados;
+  no expone rutas de sus ordenadores y acepta PDF, JPG, PNG o WEBP de hasta
+  20 MB.
+
+El flujo archiva el original, ejecuta la visión IA y se pausa si alguna línea
+necesita revisión. El cliente debe reanudar el mismo `thread_id` con:
+
+```json
+{
+  "action": "apply",
+  "corrections": [
+    {"lineIndex": 0, "unitsPerPack": "1", "packExpression": "1*1"}
+  ]
+}
+```
+
+Cuando todas las líneas son válidas, se produce una segunda pausa. Reanudarla
+con `{"approved": true}` importa la factura al catálogo; con cualquier otro
+valor se cancela sin borrar el original. La clave de idempotencia se deriva del
+hash del documento, por lo que confirmar dos veces el mismo archivo no duplica
+las ofertas.
+
+LangGraph Studio sirve para desarrollar y validar el flujo, pero no es el
+canal de adjuntos de los empleados. El chat/web/WhatsApp que se añada después
+debe subir el binario y llamar al grafo con `filename` y `content_base64`; las
+pausas de revisión se pueden mostrar como formulario conversacional y traducir
+a la estructura anterior.
 
 ## Visión de facturas con OpenClaw
 

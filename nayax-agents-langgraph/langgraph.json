@@ -2,7 +2,8 @@
   "dependencies": ["."],
   "graphs": {
     "info": "./src/nayax_agents/studio.py:make_info_graph",
-    "pricing": "./src/nayax_agents/studio.py:make_pricing_graph"
+    "pricing": "./src/nayax_agents/studio.py:make_pricing_graph",
+    "invoice": "./src/nayax_agents/studio.py:make_invoice_graph"
   },
   "env": ".env"
 }

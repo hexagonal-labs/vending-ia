@@ -4,7 +4,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .core import archive_source, extract, inspect_source
+from .core import archive_source, extract, inspect_source, revise_invoice, store_uploaded_source
 from .vision import vision_configuration as get_vision_configuration
 
 
@@ -33,9 +33,19 @@ def create_server() -> FastMCP:
         return archive_source(source_uri)
 
     @server.tool()
+    def upload_invoice(filename: str, content_base64: str) -> dict[str, str | bool]:
+        """Recibe un PDF o imagen Base64 desde un chat y lo archiva de forma idempotente."""
+        return store_uploaded_source(filename, content_base64)
+
+    @server.tool()
     def extract_invoice(source_uri: str, supplier_id: str | None = None) -> dict[str, Any]:
         """Extrae una factura al contrato supplier-invoice-ingestion/v1."""
         return extract(source_uri, supplier_id).model_dump(mode="json", by_alias=True)
+
+    @server.tool()
+    def revise_extracted_invoice(invoice: dict[str, Any], corrections: list[dict[str, Any]]) -> dict[str, Any]:
+        """Aplica correcciones humanas a líneas y recalcula su validación antes de importar."""
+        return revise_invoice(invoice, corrections).model_dump(mode="json", by_alias=True)
 
     return server
 

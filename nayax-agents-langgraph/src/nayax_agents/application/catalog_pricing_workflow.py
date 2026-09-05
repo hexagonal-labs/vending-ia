@@ -147,6 +147,39 @@ class CatalogPricingWorkflow:
             "reports": reports,
         }
 
+    async def run_all_catalogs(
+        self,
+        *,
+        max_machine_fetch_concurrency: int = 4,
+    ) -> dict[str, Any]:
+        """Compara las máquinas con todos los proveedores que tienen catálogo vigente."""
+        providers_response = _mapping(await _invoke(self._catalog_tools, "list_catalog_providers", {}))
+        provider_ids = [
+            str(provider_id) for provider_id in providers_response.get("providerIds", []) if str(provider_id).strip()
+        ]
+        if not provider_ids:
+            raise RuntimeError("No hay proveedores con productos vigentes en el catálogo local.")
+
+        results = [
+            await self.run(
+                provider_id,
+                provider_source="catalog",
+                max_machine_fetch_concurrency=max_machine_fetch_concurrency,
+            )
+            for provider_id in provider_ids
+        ]
+        return {
+            "providerSource": "catalog",
+            "providerCount": len(results),
+            "providers": results,
+            "machineCount": max((int(result["machineCount"]) for result in results), default=0),
+            "productCount": max((int(result["productCount"]) for result in results), default=0),
+            "matchedCount": sum(int(result["matchedCount"]) for result in results),
+            "reviewCount": sum(int(result["reviewCount"]) for result in results),
+            "unmatchedCount": sum(int(result["unmatchedCount"]) for result in results),
+            "reports": [report for result in results for report in result["reports"]],
+        }
+
 
 async def _invoke(tools: Mapping[str, Any], name: str, arguments: dict[str, Any]) -> Any:
     tool = tools.get(name)
@@ -159,15 +192,25 @@ def _mapping(value: Any) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return value
     if isinstance(value, str):
-        parsed = json.loads(value)
+        parsed = _parse_mcp_json(value)
         if isinstance(parsed, Mapping):
             return parsed
     if isinstance(value, list):
         text = "".join(str(item.get("text", "")) for item in value if isinstance(item, Mapping))
-        parsed = json.loads(text)
+        if not text.strip():
+            raise RuntimeError("La tool MCP devolvió una respuesta vacía; revisa el error del bridge en los logs.")
+        parsed = _parse_mcp_json(text)
         if isinstance(parsed, Mapping):
             return parsed
     raise ValueError(f"Respuesta MCP no estructurada: {value!r}")
+
+
+def _parse_mcp_json(value: str) -> Any:
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as error:
+        excerpt = value.strip()[:500]
+        raise ValueError(f"La tool MCP no devolvió JSON válido: {excerpt!r}") from error
 
 
 def _key(prefix: str, value: object) -> str:

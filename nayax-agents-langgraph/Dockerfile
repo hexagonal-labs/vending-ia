@@ -29,6 +29,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PRICING_CATALOG_BRIDGE_DIR=/opt/pricing-catalog-bridge \
     INVOICE_BRIDGE_DIR=/opt/invoice-bridge \
     PRICING_DATA_DIR=/opt/nayax-agents-langgraph/data/pricing \
+    PRICING_EXPORT_DIR=/opt/nayax-agents-langgraph/reports \
     NAYAX_NODE_COMMAND=node \
     NAYAX_CHECKPOINT_DB=/opt/nayax-agents-langgraph/data/checkpoints.db
 

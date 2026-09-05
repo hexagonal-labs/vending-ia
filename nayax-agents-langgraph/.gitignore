@@ -11,3 +11,5 @@ htmlcov/
 .env.docker
 data/*.db
 data/runs/
+reports/catalogos/
+reports/comparaciones/

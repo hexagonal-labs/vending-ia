@@ -113,21 +113,29 @@ def build_catalog_pricing_graph(
     workflow: CatalogPricingWorkflow,
     checkpointer: Any = None,
     *,
-    default_supplier_id: str = "distribuidora-mayorista",
-    default_provider_source: str = "api",
+    default_supplier_id: str | None = None,
+    default_provider_source: str = "catalog",
 ) -> Any:
     """Grafo de Studio para el pricing nuevo, basado en bridges MCP aislados."""
     from langgraph.graph import END, START, StateGraph
 
     async def execute(state: CatalogPricingState) -> CatalogPricingState:
-        supplier_id = str(state.get("supplier_id", default_supplier_id))
+        raw_supplier_id = state.get("supplier_id", default_supplier_id)
+        supplier_id = str(raw_supplier_id).strip() if raw_supplier_id else None
         provider_source = str(state.get("provider_source", default_provider_source))
         if provider_source not in {"api", "catalog"}:
             raise ValueError("provider_source debe ser 'api' o 'catalog'")
-        result = await workflow.run(
-            supplier_id,
-            provider_source=cast(Literal["api", "catalog"], provider_source),
-        )
+        if supplier_id is None:
+            if provider_source != "catalog":
+                raise ValueError(
+                    "provider_source='api' requiere indicar supplier_id; para todos los catálogos usa 'catalog'."
+                )
+            result = await workflow.run_all_catalogs()
+        else:
+            result = await workflow.run(
+                supplier_id,
+                provider_source=cast(Literal["api", "catalog"], provider_source),
+            )
         return {"status": "completed", "final_reply": str(result), "pricing_result": result}
 
     graph = StateGraph(CatalogPricingState)

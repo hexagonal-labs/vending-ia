@@ -18,6 +18,8 @@ services:
       PRICING_CATALOG_BRIDGE_DIR: /opt/pricing-catalog-bridge
       INVOICE_BRIDGE_DIR: /opt/invoice-bridge
       PRICING_DATA_DIR: /var/lib/pricing-catalog-bridge
+      PRICING_EXPORT_DIR: /opt/nayax-agents-langgraph/reports
+      INVOICE_DATA_DIR: /var/lib/invoice-bridge
       NAYAX_CHECKPOINT_DB: /opt/nayax-agents-langgraph/data/checkpoints.db
     ports:
       - "${LANGGRAPH_PORT:-2024}:2024"
@@ -26,9 +28,13 @@ services:
     volumes:
       - langgraph-data:/opt/nayax-agents-langgraph/data
       - pricing-catalog-data:/var/lib/pricing-catalog-bridge
+      - invoice-bridge-data:/var/lib/invoice-bridge
+      - ./reports:/opt/nayax-agents-langgraph/reports
     restart: unless-stopped
 
 volumes:
   langgraph-data:
   pricing-catalog-data:
+    external: true
+  invoice-bridge-data:
     external: true

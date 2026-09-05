@@ -27,8 +27,10 @@ class Settings(BaseSettings):
     invoice_bridge_dir: Path = Path("../invoice-bridge")
     bridge_python_command: str = "python"
     pricing_data_dir: Path = Path("data/pricing")
-    pricing_default_provider_id: str = "distribuidora-mayorista"
-    pricing_default_provider_source: Literal["api", "catalog"] = "api"
+    pricing_export_dir: Path = Path("reports")
+    pricing_default_provider_id: str | None = None
+    pricing_default_provider_source: Literal["api", "catalog"] = "catalog"
+    invoice_equivalence_surcharge_rate: str = "0.052"
     nayax_checkpoint_db: Path = Path("data/checkpoints.db")
     max_machine_fetch_concurrency: int = Field(default=4, ge=1, le=20)
     distribuidora_mayorista_base_url: str = "https://distribucionmayorista.online"

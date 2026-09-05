@@ -17,7 +17,11 @@ from pricing_catalog_bridge.infrastructure import FilePricingCatalogRepository
 
 
 def create_server(data_dir: Path | None = None) -> FastMCP:
-    repository = FilePricingCatalogRepository(data_dir or Path(os.getenv("PRICING_DATA_DIR", "pricing-data")))
+    export_dir = os.getenv("PRICING_EXPORT_DIR", "").strip()
+    repository = FilePricingCatalogRepository(
+        data_dir or Path(os.getenv("PRICING_DATA_DIR", "pricing-data")),
+        Path(export_dir) if export_dir else None,
+    )
     server = FastMCP(
         "pricing-catalog-bridge",
         instructions=(
@@ -34,6 +38,12 @@ def create_server(data_dir: Path | None = None) -> FastMCP:
             "dataDir": str(repository._data_dir),
             "mappingsWorkbook": str(repository._data_dir / "catalog" / "product-mappings.xlsx"),
         }
+
+    @server.tool()
+    def list_catalog_providers() -> dict[str, Any]:
+        """Lista los proveedores con productos vigentes en su catálogo local."""
+        provider_ids = repository.list_catalog_providers()
+        return {"count": len(provider_ids), "providerIds": list(provider_ids)}
 
     @server.tool()
     def record_supplier_snapshot(snapshot: dict[str, Any], idempotency_key: str) -> dict[str, Any]:

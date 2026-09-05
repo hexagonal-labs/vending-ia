@@ -59,6 +59,7 @@ _BRIDGE_ENV_NAMES = (
     "INVOICE_VISION_MODEL",
     "INVOICE_VISION_TIMEOUT_SECONDS",
     "INVOICE_VISION_MAX_ATTEMPTS",
+    "INVOICE_DATA_DIR",
     "OPENCLAW_GATEWAY_URL",
     "OPENCLAW_GATEWAY_TOKEN",
     "OPENCLAW_GATEWAY_MODEL",
@@ -102,6 +103,7 @@ def build_pricing_mcp_client(
     nayax_node_command: str = "node",
     python_command: str = sys.executable,
     pricing_data_dir: Path = Path("data/pricing"),
+    pricing_export_dir: Path = Path("reports"),
 ) -> Any:
     """Conecta el núcleo a bridges aislados; ningún bridge llama a otro."""
     from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -129,7 +131,10 @@ def build_pricing_mcp_client(
                 pricing_catalog_bridge_dir,
                 "pricing_catalog_bridge.interfaces.mcp_server",
                 python_command,
-                {"PRICING_DATA_DIR": str(pricing_data_dir)},
+                {
+                    "PRICING_DATA_DIR": str(pricing_data_dir),
+                    "PRICING_EXPORT_DIR": str(pricing_export_dir),
+                },
             ),
             "invoice": _python_mcp_server(invoice_bridge_dir, "invoice_bridge.server", python_command),
     }
@@ -181,7 +186,7 @@ async def load_read_tools(client: Any) -> dict[str, Any]:
 
 def group_pricing_tools(tools: list[Any]) -> dict[str, dict[str, Any]]:
     """Agrupa tools de una conexión MultiServer, incluso si están prefijadas."""
-    groups: dict[str, dict[str, Any]] = {"nayax": {}, "supplier": {}, "pricing_catalog": {}}
+    groups: dict[str, dict[str, Any]] = {"nayax": {}, "supplier": {}, "pricing_catalog": {}, "invoice": {}}
     for tool in tools:
         name = str(getattr(tool, "name", ""))
         for server, group in groups.items():
@@ -192,6 +197,14 @@ def group_pricing_tools(tools: list[Any]) -> dict[str, dict[str, Any]]:
             groups["nayax"][name] = tool
         elif name == "fetch_supplier_offers":
             groups["supplier"][name] = tool
-        elif name in {"record_supplier_snapshot", "match_products", "generate_machine_supplier_report"}:
+        elif name in {
+            "record_supplier_snapshot",
+            "record_supplier_invoice",
+            "list_catalog_providers",
+            "match_products",
+            "generate_machine_supplier_report",
+        }:
             groups["pricing_catalog"][name] = tool
+        elif name in {"archive_invoice", "upload_invoice", "extract_invoice", "revise_extracted_invoice"}:
+            groups["invoice"][name] = tool
     return groups

@@ -7,7 +7,9 @@ from typing import Any
 from langgraph_sdk.runtime import ServerRuntime
 
 from nayax_agents.application.catalog_pricing_workflow import CatalogPricingWorkflow
+from nayax_agents.application.invoice_review_workflow import InvoiceReviewWorkflow
 from nayax_agents.graphs.info_graph import build_info_graph
+from nayax_agents.graphs.invoice_review_graph import build_invoice_review_graph
 from nayax_agents.graphs.pricing_graph import build_catalog_pricing_graph
 from nayax_agents.infrastructure.config import Settings
 from nayax_agents.infrastructure.llm import build_chat_model
@@ -52,10 +54,40 @@ async def make_pricing_graph(runtime: ServerRuntime[Any]) -> AsyncIterator[Any]:
         nayax_node_command=settings.nayax_node_command,
         python_command=settings.bridge_python_command,
         pricing_data_dir=settings.pricing_data_dir,
+        pricing_export_dir=settings.pricing_export_dir,
     )
     grouped = group_pricing_tools(await client.get_tools())
     yield build_catalog_pricing_graph(
         CatalogPricingWorkflow(grouped["nayax"], grouped["supplier"], grouped["pricing_catalog"]),
         default_supplier_id=settings.pricing_default_provider_id,
         default_provider_source=settings.pricing_default_provider_source,
+    )
+
+
+@asynccontextmanager
+async def make_invoice_graph(runtime: ServerRuntime[Any]) -> AsyncIterator[Any]:
+    """Factory del workflow de carga, revisión e importación de facturas."""
+    settings = Settings()
+    if runtime.execution_runtime is None:
+        yield build_invoice_review_graph(
+            InvoiceReviewWorkflow({}, {}, equivalence_surcharge_rate=settings.invoice_equivalence_surcharge_rate)
+        )
+        return
+    client = build_pricing_mcp_client(
+        nayax_bridge_dir=settings.nayax_bridge_dir,
+        supplier_bridge_dir=settings.supplier_bridge_dir,
+        pricing_catalog_bridge_dir=settings.pricing_catalog_bridge_dir,
+        invoice_bridge_dir=settings.invoice_bridge_dir,
+        nayax_node_command=settings.nayax_node_command,
+        python_command=settings.bridge_python_command,
+        pricing_data_dir=settings.pricing_data_dir,
+        pricing_export_dir=settings.pricing_export_dir,
+    )
+    grouped = group_pricing_tools(await client.get_tools())
+    yield build_invoice_review_graph(
+        InvoiceReviewWorkflow(
+            grouped["invoice"],
+            grouped["pricing_catalog"],
+            equivalence_surcharge_rate=settings.invoice_equivalence_surcharge_rate,
+        )
     )

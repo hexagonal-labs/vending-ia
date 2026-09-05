@@ -4,11 +4,13 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 from pricing_catalog_bridge.application.contracts import SupplierInvoiceIngestionV1
-from pricing_catalog_bridge.domain import SupplierOffer, SupplierOfferSnapshot, VendingProduct
+from pricing_catalog_bridge.domain import ProductMatch, SupplierOffer, SupplierOfferSnapshot, VendingProduct
 from pricing_catalog_bridge.infrastructure import FilePricingCatalogRepository
+from pricing_catalog_bridge.infrastructure.catalog_repository import _comparison_report_filename
 
 
 def _snapshot(cost: str = "0.62") -> SupplierOfferSnapshot:
@@ -58,6 +60,17 @@ def test_snapshot_updates_current_catalog_and_keeps_append_only_history(tmp_path
     assert len(list((data_dir / "providers" / "distribuidora-mayorista" / "snapshots").glob("*.json"))) == 2
 
 
+def test_list_catalog_providers_only_returns_providers_with_current_offers(tmp_path: Path) -> None:
+    repository = FilePricingCatalogRepository(tmp_path / "pricing-data")
+    repository.initialize()
+
+    assert repository.list_catalog_providers() == ()
+
+    repository.record_supplier_snapshot(_snapshot(), "run-001")
+
+    assert repository.list_catalog_providers() == ("distribuidora-mayorista",)
+
+
 def test_catalog_workbook_is_valid_xlsx_with_auditable_sheets(tmp_path: Path) -> None:
     repository = FilePricingCatalogRepository(tmp_path / "pricing-data")
     result = repository.record_supplier_snapshot(_snapshot(), "run-001")
@@ -71,6 +84,47 @@ def test_catalog_workbook_is_valid_xlsx_with_auditable_sheets(tmp_path: Path) ->
     assert "Refresco cola lata 330 ml" in sheet
     assert "0.62" in sheet
     assert sheet.index("<sheetViews>") < sheet.index("<cols>") < sheet.index("<sheetData>")
+
+
+def test_catalogs_and_comparisons_are_exported_to_the_project_directory(tmp_path: Path) -> None:
+    data_dir = tmp_path / "pricing-data"
+    export_dir = tmp_path / "project-reports"
+    repository = FilePricingCatalogRepository(data_dir, export_dir)
+    repository.record_supplier_snapshot(_snapshot(), "run-001")
+
+    exported_catalog = export_dir / "catalogos" / "distribuidora-mayorista" / "catalog.xlsx"
+    assert exported_catalog.is_file()
+
+    report = repository.generate_machine_supplier_report(
+        "distribuidora-mayorista",
+        [
+            SimpleNamespace(
+                machine_id="42",
+                machine_name="Máquina prueba",
+                selection="1",
+                canonical_product_id="nayax:1",
+                product_name="Refresco prueba",
+                machine_price=Decimal("1.50"),
+            )
+        ],
+        [ProductMatch("nayax:1", None, "UNMATCHED", "none", 0.0, (), "No encontrado.")],
+        run_id="pricing-001",
+    )
+
+    exported_report = export_dir / "comparaciones" / "distribuidora-mayorista" / report.name
+    assert report.is_file()
+    assert exported_report.is_file()
+    assert exported_report.read_bytes() == report.read_bytes()
+
+
+def test_comparison_report_filename_uses_provider_machine_and_local_timestamp() -> None:
+    filename = _comparison_report_filename(
+        "cashoreca",
+        "Máquina prueba",
+        datetime(2026, 9, 6, 21, 22, tzinfo=UTC),
+    )
+
+    assert filename == "cashoreca-Maquina-prueba-06_09_2026_23:22.xlsx"
 
 
 def test_matching_persists_only_ambiguous_and_unmatched_products(tmp_path: Path) -> None:

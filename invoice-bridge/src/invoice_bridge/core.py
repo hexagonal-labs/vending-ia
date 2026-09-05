@@ -7,6 +7,7 @@ marcada para revisión humana.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 import re
@@ -18,6 +19,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from .vision import VisionInvoice, VisionLine, extract_with_configured_vision
+
+MAX_UPLOADED_INVOICE_BYTES = 20 * 1024 * 1024
+_SUPPORTED_UPLOAD_SUFFIXES = frozenset({".pdf", ".jpg", ".jpeg", ".png", ".webp"})
 
 
 class ContractModel(BaseModel):
@@ -50,6 +54,21 @@ class ExtractedInvoice(ContractModel):
     lines: list[InvoiceLine]
 
 
+class InvoiceLineCorrection(ContractModel):
+    """Corrección humana de una línea antes de importarla al catálogo."""
+
+    line_index: int = Field(ge=0, alias="lineIndex")
+    raw_description: str | None = Field(default=None, alias="rawDescription")
+    supplier_reference: str | None = Field(default=None, alias="supplierReference")
+    barcode: str | None = None
+    purchase_quantity: Decimal | None = Field(default=None, gt=0, alias="purchaseQuantity")
+    pack_expression: str | None = Field(default=None, alias="packExpression")
+    units_per_pack: Decimal | None = Field(default=None, gt=0, alias="unitsPerPack")
+    pack_price_net: Decimal | None = Field(default=None, ge=0, alias="packPriceNet")
+    line_total_net: Decimal | None = Field(default=None, ge=0, alias="lineTotalNet")
+    vat_rate: Decimal | None = Field(default=None, ge=0, le=1, alias="vatRate")
+
+
 def inspect_source(source_uri: str) -> dict[str, Any]:
     """Identifica el proveedor a partir del texto disponible en el archivo."""
     path = Path(source_uri)
@@ -59,11 +78,40 @@ def inspect_source(source_uri: str) -> dict[str, Any]:
 def archive_source(source_uri: str) -> dict[str, str | bool]:
     """Copia un original al archivo duradero propiedad de invoice-bridge."""
     source = Path(source_uri)
-    data = source.read_bytes()
+    return _archive_data(source.read_bytes(), source.name)
+
+
+def store_uploaded_source(filename: str, content_base64: str) -> dict[str, str | bool]:
+    """Guarda un adjunto recibido por una API/chat en el archivo duradero.
+
+    El contenido se recibe codificado para que un cliente de chat pueda enviar
+    un PDF o imagen sin dar al servidor una ruta arbitraria de su sistema.
+    """
+    safe_name = _safe_filename(filename)
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in _SUPPORTED_UPLOAD_SUFFIXES:
+        supported = ", ".join(sorted(_SUPPORTED_UPLOAD_SUFFIXES))
+        raise ValueError(f"Formato de factura no permitido ({suffix or 'sin extensión'}). Usa: {supported}.")
+    max_base64_characters = (MAX_UPLOADED_INVOICE_BYTES * 4 + 2) // 3 + 4
+    if len(content_base64) > max_base64_characters:
+        raise ValueError(f"El archivo adjunto supera el máximo de {MAX_UPLOADED_INVOICE_BYTES // 1024 // 1024} MB.")
+    try:
+        data = base64.b64decode(content_base64, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError("content_base64 no contiene un archivo Base64 válido.") from error
+    if not data:
+        raise ValueError("El archivo adjunto está vacío.")
+    if len(data) > MAX_UPLOADED_INVOICE_BYTES:
+        raise ValueError(f"El archivo adjunto supera el máximo de {MAX_UPLOADED_INVOICE_BYTES // 1024 // 1024} MB.")
+    return _archive_data(data, safe_name)
+
+
+def _archive_data(data: bytes, filename: str) -> dict[str, str | bool]:
+    """Persiste bytes de factura de forma idempotente en el archivo propio."""
     source_hash = hashlib.sha256(data).hexdigest()
     archive_directory = _invoice_data_directory() / "uploads"
     archive_directory.mkdir(parents=True, exist_ok=True)
-    destination = archive_directory / f"{source_hash}-{_safe_filename(source.name)}"
+    destination = archive_directory / f"{source_hash}-{_safe_filename(filename)}"
     if destination.is_file():
         return {"sourceUri": str(destination), "sourceHash": source_hash, "duplicate": True}
     temporary_destination = archive_directory / f".{destination.name}.{os.getpid()}.tmp"
@@ -114,6 +162,25 @@ def extract(source_uri: str, supplier_id: str | None = None) -> ExtractedInvoice
         )
 
     return _cashoreca_invoice(text, source_hash)
+
+
+def revise_invoice(invoice: dict[str, Any], corrections: list[dict[str, Any]]) -> ExtractedInvoice:
+    """Aplica correcciones humanas y vuelve a validar la factura de forma determinista."""
+    extracted = ExtractedInvoice.model_validate(invoice)
+    if extracted.provider_id != "cashoreca":
+        raise ValueError("Solo se pueden revisar facturas Cashoreca en este momento.")
+    lines = list(extracted.lines)
+    for raw_correction in corrections:
+        correction = InvoiceLineCorrection.model_validate(raw_correction)
+        if correction.line_index >= len(lines):
+            raise ValueError(f"La línea {correction.line_index} no existe en la factura.")
+        lines[correction.line_index] = _apply_line_correction(lines[correction.line_index], correction)
+    return extracted.model_copy(
+        update={
+            "lines": lines,
+            "status": "EXTRACTED" if _all_lines_valid(lines) else "REVIEW_REQUIRED",
+        }
+    )
 
 
 def parse_cashoreca(text: str) -> list[InvoiceLine]:
@@ -255,6 +322,24 @@ def _line_from_vision(line: VisionLine) -> InvoiceLine:
         line.vat_rate,
         line.pack_expression,
         line.units_per_pack,
+    )
+
+
+def _apply_line_correction(line: InvoiceLine, correction: InvoiceLineCorrection) -> InvoiceLine:
+    current = line.model_dump()
+    for field_name in correction.model_fields_set - {"line_index"}:
+        current[field_name] = getattr(correction, field_name)
+    return _invoice_line(
+        str(current["raw_description"]),
+        current["supplier_reference"],
+        current["barcode"],
+        current["purchase_quantity"],
+        current["pack_price_net"],
+        Decimal("0"),
+        current["line_total_net"],
+        current["vat_rate"],
+        current["pack_expression"],
+        current["units_per_pack"],
     )
 
 

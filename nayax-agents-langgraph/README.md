@@ -235,3 +235,9 @@ sin aceptar módulos arbitrarios durante la deserialización.
 - El LLM no calcula márgenes ni decide reglas de negocio.
 - El dominio no conoce LangGraph, MCP, HTTP ni OpenAI.
 - Telegram será un adaptador opcional; el CLI no depende de él.
+
+## Para copiar fichero que se subira en invoice
+
+docker compose --env-file .env.docker cp \
+  "/Users/esmircabrera/Downloads/FACTURAS JULIO 2026/ChinoF47315.pdf" \
+  nayax-agents:/var/lib/invoice-bridge/ChinoF47315.pdf

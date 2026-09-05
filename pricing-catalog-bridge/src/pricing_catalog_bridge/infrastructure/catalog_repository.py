@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -13,6 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from pricing_catalog_bridge.domain import (
     IngestionResult,
@@ -32,8 +35,9 @@ _PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 class FilePricingCatalogRepository:
     """Persistencia local con un índice JSON y libros XLSX reproducibles."""
 
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, export_dir: Path | None = None) -> None:
         self._data_dir = data_dir
+        self._export_dir = export_dir
 
     def initialize(self) -> None:
         self._data_dir.mkdir(parents=True, exist_ok=True)
@@ -49,6 +53,20 @@ class FilePricingCatalogRepository:
                 write_workbook(report_path, _report_template())
             for provider_id, provider_state in state["providers"].items():
                 self._write_catalog(provider_id, provider_state)
+            self._export_existing_reports()
+
+    def list_catalog_providers(self) -> tuple[str, ...]:
+        """Devuelve proveedores que tienen al menos una oferta vigente importada."""
+        self.initialize()
+        with self._locked():
+            state = self._read_index()
+            return tuple(
+                sorted(
+                    _validate_provider_id(provider_id)
+                    for provider_id, provider_state in state["providers"].items()
+                    if provider_state.get("currentOffers")
+                )
+            )
 
     def match_products(
         self,
@@ -229,7 +247,10 @@ class FilePricingCatalogRepository:
                     )
             written: list[Path] = []
             for (machine_id, machine_name), rows in rows_by_machine.items():
-                path = self._data_dir / "reports" / provider_id / f"{_safe_name(machine_id)}-{run_id}.xlsx"
+                path = self._data_dir / "reports" / provider_id / _comparison_report_filename(
+                    provider_id,
+                    machine_name,
+                )
                 no_match = unmatched_by_machine.get((machine_id, machine_name), [])
                 matched_count = len(rows) - len(no_match)
                 write_workbook(
@@ -272,6 +293,7 @@ class FilePricingCatalogRepository:
                         ),
                     ),
                 )
+                self._export_comparison(provider_id, path)
                 written.append(path)
             if not written:
                 raise ValueError("No hay productos de máquina para generar el informe")
@@ -498,8 +520,9 @@ class FilePricingCatalogRepository:
         imports = provider_state["imports"]
         pending_reviews = provider_state.get("pendingReviews", [])
         unmatched = provider_state.get("unmatched", {}).values()
+        catalog_path = self.catalog_path_for(provider_id)
         write_workbook(
-            self.catalog_path_for(provider_id),
+            catalog_path,
             (
                 WorkbookSheet(
                     "Ofertas actuales",
@@ -621,6 +644,30 @@ class FilePricingCatalogRepository:
                 ),
             ),
         )
+        self._export_catalog(provider_id, catalog_path)
+
+    def _export_catalog(self, provider_id: str, catalog_path: Path) -> None:
+        if self._export_dir is None:
+            return
+        _copy_atomically(catalog_path, self._export_dir / "catalogos" / provider_id / "catalog.xlsx")
+
+    def _export_comparison(self, provider_id: str, report_path: Path) -> None:
+        if self._export_dir is None:
+            return
+        _copy_atomically(report_path, self._export_dir / "comparaciones" / provider_id / report_path.name)
+
+    def _export_existing_reports(self) -> None:
+        if self._export_dir is None:
+            return
+        reports_directory = self._data_dir / "reports"
+        if not reports_directory.is_dir():
+            return
+        for provider_directory in reports_directory.iterdir():
+            if not provider_directory.is_dir():
+                continue
+            provider_id = _validate_provider_id(provider_directory.name)
+            for report_path in provider_directory.glob("*.xlsx"):
+                self._export_comparison(provider_id, report_path)
 
     def _write_mappings(self, state: dict[str, Any]) -> None:
         write_workbook(
@@ -682,6 +729,23 @@ def _mappings_template() -> tuple[WorkbookSheet, ...]:
         WorkbookSheet("Aliases", ("Proveedor", "Alias", "NayaxProductID", "Creado en")),
         WorkbookSheet("Pendientes revisión", ("Revisión", "Proveedor", "Producto", "Motivo", "Creado")),
     )
+
+
+def _copy_atomically(source: Path, destination: Path) -> None:
+    """Publica un Excel terminado sin que un lector vea una copia parcial."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        shutil.copy2(source, temporary_path)
+        temporary_path.replace(destination)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _report_template() -> tuple[WorkbookSheet, ...]:
@@ -926,4 +990,12 @@ def _margin(machine_price: Decimal | None, cost: Decimal | None) -> Decimal | No
 
 
 def _safe_name(value: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-") or "machine"
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "-", normalized).strip("-") or "machine"
+
+
+def _comparison_report_filename(provider_id: str, machine_name: str, generated_at: datetime | None = None) -> str:
+    """Nombre legible y local de los Excel de comparación."""
+    local_time = (generated_at or datetime.now(ZoneInfo("Europe/Madrid"))).astimezone(ZoneInfo("Europe/Madrid"))
+    timestamp = local_time.strftime("%d_%m_%Y_%H:%M")
+    return f"{_safe_name(provider_id)}-{_safe_name(machine_name)}-{timestamp}.xlsx"
