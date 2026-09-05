@@ -17,8 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .ocr import extract_text_with_tesseract, log_ocr_failure
-from .vision import VisionInvoice, VisionLine, extract_with_configured_vision, log_vision_failure
+from .vision import VisionInvoice, VisionLine, extract_with_configured_vision
 
 
 class ContractModel(BaseModel):
@@ -94,33 +93,16 @@ def extract(source_uri: str, supplier_id: str | None = None) -> ExtractedInvoice
     detected = inspect_text(text)
     provider_id = supplier_id or detected["providerId"]
     source_hash = hashlib.sha256(data).hexdigest()
-    ocr_text_used = False
 
-    # En fotos y PDF escaneados no hay capa de texto. Primero intentamos OCR
-    # local: no tiene coste por página ni expone la factura a un tercero.
-    if provider_id != "cashoreca" and _is_visual_document(path):
-        try:
-            ocr_text = extract_text_with_tesseract(path)
-        except Exception as error:
-            log_ocr_failure(error)
-            ocr_text = None
-        if ocr_text:
-            text = ocr_text
-            ocr_text_used = True
-            detected = inspect_text(text)
-            provider_id = supplier_id or detected["providerId"]
+    # Un PDF digital con todas sus líneas verificadas no necesita IA. En fotos,
+    # escaneos o texto parcial, la extracción se hace exclusivamente con visión.
+    native_lines = parse_cashoreca(text) if provider_id == "cashoreca" else []
+    if _all_lines_valid(native_lines):
+        return _cashoreca_invoice(text, source_hash, native_lines)
 
-    # Si OCR reconoció el proveedor pero no pudo formar ninguna línea válida,
-    # la visión puede aportar una segunda lectura estructurada.
-    needs_vision = provider_id != "cashoreca" or (ocr_text_used and not parse_cashoreca(text))
-    if needs_vision and _is_visual_document(path):
-        try:
-            visual_invoice = extract_with_configured_vision(path, data)
-        except Exception as error:
-            log_vision_failure(error)
-            visual_invoice = None
-        if visual_invoice is not None:
-            return _from_vision(visual_invoice, source_hash, supplier_id)
+    if _is_visual_document(path):
+        visual_invoice = extract_with_configured_vision(path, data)
+        return _from_vision(visual_invoice, source_hash, supplier_id)
 
     if provider_id != "cashoreca":
         return ExtractedInvoice(
@@ -131,16 +113,7 @@ def extract(source_uri: str, supplier_id: str | None = None) -> ExtractedInvoice
             lines=[],
         )
 
-    lines = parse_cashoreca(text)
-    return ExtractedInvoice(
-        providerId="cashoreca",
-        supplierName="CASHORECA",
-        invoiceNumber=_first(r"N[ºO°]?\s*FAC\s*[:.]?\s*([A-Z0-9-]+)", text),
-        sourceHash=source_hash,
-        ingestedAt=datetime.now(UTC),
-        status="EXTRACTED" if lines else "REVIEW_REQUIRED",
-        lines=lines,
-    )
+    return _cashoreca_invoice(text, source_hash)
 
 
 def parse_cashoreca(text: str) -> list[InvoiceLine]:
@@ -163,16 +136,11 @@ def parse_cashoreca(text: str) -> list[InvoiceLine]:
                                           discount, line_total, vat, None, None))
     if parsed_lines:
         return parsed_lines
-    return _parse_cashoreca_ocr(text)
+    return _parse_cashoreca_plain_table(text)
 
 
-def _parse_cashoreca_ocr(text: str) -> list[InvoiceLine]:
-    """Parsea una línea tabular reconocida por Tesseract.
-
-    Tesseract no conserva separadores de tabla, pero Cashoreca mantiene las
-    cinco columnas numéricas al final. Se exige esa estructura completa para
-    evitar importar una lectura OCR parcial.
-    """
+def _parse_cashoreca_plain_table(text: str) -> list[InvoiceLine]:
+    """Parsea una tabla de texto que no conserva separadores verticales."""
     parsed_lines: list[InvoiceLine] = []
     pattern = re.compile(
         r"^\s*(?P<reference>\S+)\s+(?P<barcode>\d{8,14})\s+"
@@ -229,9 +197,30 @@ def _from_vision(vision: VisionInvoice, source_hash: str, supplier_id: str | Non
         invoiceNumber=vision.invoice_number,
         sourceHash=source_hash,
         ingestedAt=datetime.now(UTC),
-        status="EXTRACTED" if lines else "REVIEW_REQUIRED",
+        status="EXTRACTED" if _all_lines_valid(lines) else "REVIEW_REQUIRED",
         lines=lines,
     )
+
+
+def _cashoreca_invoice(
+    text: str,
+    source_hash: str,
+    lines: list[InvoiceLine] | None = None,
+) -> ExtractedInvoice:
+    parsed_lines = lines if lines is not None else parse_cashoreca(text)
+    return ExtractedInvoice(
+        providerId="cashoreca",
+        supplierName="CASHORECA",
+        invoiceNumber=_first(r"N[ºO°]?\s*FAC\s*[:.]?\s*([A-Z0-9-]+)", text),
+        sourceHash=source_hash,
+        ingestedAt=datetime.now(UTC),
+        status="EXTRACTED" if _all_lines_valid(parsed_lines) else "REVIEW_REQUIRED",
+        lines=parsed_lines,
+    )
+
+
+def _all_lines_valid(lines: list[InvoiceLine]) -> bool:
+    return bool(lines) and all(line.validation_status == "VALID" for line in lines)
 
 
 def _line_from_vision(line: VisionLine) -> InvoiceLine:
@@ -340,11 +329,18 @@ def _decimal(value: str) -> Decimal | None:
 
 
 def _pack_expression(description: str) -> tuple[str, str] | None:
-    # En OCR es habitual que el asterisco de "1*24" se lea como "+".
-    match = re.search(r"\b(\d+\s*[x*+]\s*(\d+))\b", description, re.IGNORECASE)
+    # "40G*14" expresa 14 unidades por pack. Un peso sin multiplicador, como
+    # "454GR", no se interpreta como un pack.
+    match = re.search(
+        r"\b(?:(\d+(?:[.,]\d+)?\s*(?:g|gr|kg|ml|cl|l)\s*)?([x*+])\s*(\d+)|(\d+)\s*([x*+])\s*(\d+))\b",
+        description,
+        re.IGNORECASE,
+    )
     if match is None:
         return None
-    return match.group(1).replace(" ", "").replace("+", "*"), match.group(2)
+    if match.group(1) is not None:
+        return match.group(0).replace(" ", "").replace("+", "*"), match.group(3)
+    return match.group(0).replace(" ", "").replace("+", "*"), match.group(6)
 
 
 def _first(pattern: str, text: str) -> str | None:

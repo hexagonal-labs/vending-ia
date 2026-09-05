@@ -3,6 +3,8 @@ pyproject.toml
 src/nayax_agents/__init__.py
 src/nayax_agents/studio.py
 src/nayax_agents/application/__init__.py
+src/nayax_agents/application/catalog_pricing_workflow.py
+src/nayax_agents/application/contracts.py
 src/nayax_agents/application/ports.py
 src/nayax_agents/domain/__init__.py
 src/nayax_agents/domain/margin_report.py
@@ -18,7 +20,9 @@ src/nayax_agents/infrastructure/config.py
 src/nayax_agents/infrastructure/llm.py
 src/nayax_agents/infrastructure/mappings.py
 src/nayax_agents/infrastructure/mcp.py
+src/nayax_agents/infrastructure/messages.py
 src/nayax_agents/infrastructure/nayax_catalog.py
+src/nayax_agents/infrastructure/openclaw_model.py
 src/nayax_agents/infrastructure/supplier.py
 src/nayax_agents/interfaces/__init__.py
 src/nayax_agents/interfaces/cli/__init__.py

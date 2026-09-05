@@ -34,22 +34,28 @@ INVOICE_DATA_DIR=/var/lib/invoice-bridge
 INVOICE_UPLOAD_STAGING_DIR=/tmp/invoice-upload-test
 INVOICE_EQUIVALENCE_SURCHARGE_RATE=0.052
 INVOICE_UPLOAD_MAX_BYTES=20971520
-INVOICE_TESSERACT_ENABLED=true
-INVOICE_TESSERACT_LANGUAGES=spa+eng
 INVOICE_VISION_PROVIDER=openclaw_gateway
 ```
 
 El botón **Confirmar e importar** sólo transmite las líneas `VALID`; las que
 indican `REVIEW_REQUIRED` nunca modifican el coste actual.
 
-Para fotos y PDF escaneados, `invoice-bridge` intenta primero **Tesseract
-local** (español e inglés) y aplica el parser determinista de Cashoreca. Si no
-puede identificar o validar la factura, usa como respaldo
-`OPENCLAW_GATEWAY_URL`, `OPENCLAW_GATEWAY_TOKEN` y
-`OPENCLAW_GATEWAY_MODEL` del proyecto hermano `nayax-agents-langgraph`.
-Envía el documento al endpoint OpenResponses y vuelve a validar
-determinísticamente cantidad, PRE/U, descuento, importe, IVA y unidades por
-pack antes de que la interfaz permita importar.
+Para fotos y PDF escaneados, `invoice-bridge` usa exclusivamente visión IA.
+Configura `INVOICE_VISION_MODEL` con
+`openclaw/nayax-invoice-vision`; no reutilices el agente puente de tools Nayax.
+El Gateway, su token y el modelo general se heredan desde
+`nayax-agents-langgraph/.env.docker`.
+
+La IA recibe el documento mediante OpenResponses y devuelve únicamente el JSON
+de extracción. Después el bridge valida de forma determinista cantidad, PRE/U,
+descuento, importe, IVA y unidades por pack. Las líneas ambiguas quedan como
+`REVIEW_REQUIRED` y no se incorporan al catálogo.
+
+Si el Gateway rechaza la factura, falla la conexión o la IA no devuelve el
+contrato esperado tras los reintentos, la carga responde con HTTP 422 y el
+motivo concreto. Para el despliegue con API key, cambia
+`INVOICE_VISION_PROVIDER=openai` y configura `OPENAI_API_KEY`, sin cambiar el
+flujo de carga.
 
 ## Arranque con Docker
 

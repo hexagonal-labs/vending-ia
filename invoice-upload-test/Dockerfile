@@ -4,12 +4,6 @@ FROM python:3.12-slim
 
 WORKDIR /opt/invoice-upload-test
 
-# OCR local para fotos y PDF escaneados: Tesseract (español/inglés) y Poppler
-# para rasterizar PDF. No depende de una API externa.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa poppler-utils \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY . .
 COPY --from=invoice_bridge . /opt/invoice-bridge
 COPY --from=pricing_catalog_bridge . /opt/pricing-catalog-bridge

@@ -52,6 +52,19 @@ _BRIDGE_ENV_NAMES = (
     "DISTRIBUIDORA_MAYORISTA_PRICE_INCLUDES_EQUIVALENCE_SURCHARGE",
     "DISTRIBUIDORA_MAYORISTA_VAT_RATE",
     "DISTRIBUIDORA_MAYORISTA_EQUIVALENCE_SURCHARGE_RATE",
+    # invoice-bridge se inicia como proceso MCP hijo. Debe heredar la
+    # configuración de visión para poder usar el agente OCR remoto, sin que el
+    # grafo o el bridge de Nayax tengan que conocer sus secretos.
+    "INVOICE_VISION_PROVIDER",
+    "INVOICE_VISION_MODEL",
+    "INVOICE_VISION_TIMEOUT_SECONDS",
+    "INVOICE_VISION_MAX_ATTEMPTS",
+    "OPENCLAW_GATEWAY_URL",
+    "OPENCLAW_GATEWAY_TOKEN",
+    "OPENCLAW_GATEWAY_MODEL",
+    "OPENCLAW_GATEWAY_TIMEOUT_SECONDS",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
 )
 
 

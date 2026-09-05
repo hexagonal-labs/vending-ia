@@ -106,6 +106,21 @@ Los checkpoints se guardan en el volumen Docker `langgraph-data`. El catálogo
 de proveedores usa el volumen externo `pricing-catalog-data`, compartido con
 el cargador temporal de facturas, y ambos sobreviven al reinicio del contenedor.
 
+## Visión de facturas con OpenClaw
+
+La extracción de facturas usa un agente distinto del LLM principal:
+
+```env
+OPENCLAW_GATEWAY_MODEL=openclaw/nayax-langgraph-bridge
+INVOICE_VISION_MODEL=openclaw/nayax-invoice-vision
+```
+
+`nayax-langgraph-bridge` conserva las consultas y tools Nayax. El agente
+`nayax-invoice-vision` recibe PDF e imágenes, devuelve JSON de factura y no
+tiene permisos de escritura ni tools Nayax. Las fotos y PDF escaneados se
+extraen exclusivamente con visión IA: si el Gateway falla, la carga comunica el
+motivo y no genera un resultado de fallback.
+
 ## Cambiar a API de OpenAI
 
 En `.env.docker`, cambiar el proveedor:
