@@ -241,3 +241,15 @@ sin aceptar módulos arbitrarios durante la deserialización.
 docker compose --env-file .env.docker cp \
   "/Users/esmircabrera/Downloads/FACTURAS JULIO 2026/ChinoF47315.pdf" \
   nayax-agents:/var/lib/invoice-bridge/ChinoF47315.pdf
+
+  {
+  "action": "apply",
+  "corrections": [
+    {
+      "lineIndex": 2,
+      "unitsPerPack": "1",
+      "packExpression": "1*1",
+      "rawDescription": "AMERICA PANELA REDONDA 454GR"
+    }
+  ]
+}
