@@ -1,0 +1,34 @@
+services:
+  nayax-agents:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      additional_contexts:
+        bridge: ../nayax-bridge
+        supplier_bridge: ../supplier-bridge
+        pricing_catalog_bridge: ../pricing-catalog-bridge
+        invoice_bridge: ../invoice-bridge
+    env_file:
+      - path: .env.docker
+        required: true
+    environment:
+      NAYAX_BRIDGE_DIR: /opt/nayax-bridge
+      NAYAX_NODE_COMMAND: node
+      SUPPLIER_BRIDGE_DIR: /opt/supplier-bridge
+      PRICING_CATALOG_BRIDGE_DIR: /opt/pricing-catalog-bridge
+      INVOICE_BRIDGE_DIR: /opt/invoice-bridge
+      PRICING_DATA_DIR: /var/lib/pricing-catalog-bridge
+      NAYAX_CHECKPOINT_DB: /opt/nayax-agents-langgraph/data/checkpoints.db
+    ports:
+      - "${LANGGRAPH_PORT:-2024}:2024"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - langgraph-data:/opt/nayax-agents-langgraph/data
+      - pricing-catalog-data:/var/lib/pricing-catalog-bridge
+    restart: unless-stopped
+
+volumes:
+  langgraph-data:
+  pricing-catalog-data:
+    external: true

@@ -1,0 +1,32 @@
+services:
+  invoice-upload-test:
+    env_file:
+      - path: ../nayax-agents-langgraph/.env.docker
+        required: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      additional_contexts:
+        invoice_bridge: ../invoice-bridge
+        pricing_catalog_bridge: ../pricing-catalog-bridge
+    environment:
+      INVOICE_DATA_DIR: /var/lib/invoice-bridge
+      PRICING_DATA_DIR: /var/lib/pricing-catalog-bridge
+      INVOICE_UPLOAD_STAGING_DIR: /tmp/invoice-upload-test
+      INVOICE_TESSERACT_ENABLED: "${INVOICE_TESSERACT_ENABLED:-true}"
+      INVOICE_TESSERACT_LANGUAGES: "${INVOICE_TESSERACT_LANGUAGES:-spa+eng}"
+      INVOICE_VISION_PROVIDER: "${INVOICE_VISION_PROVIDER:-openclaw_gateway}"
+      INVOICE_EQUIVALENCE_SURCHARGE_RATE: "${INVOICE_EQUIVALENCE_SURCHARGE_RATE:-0.052}"
+      INVOICE_UPLOAD_MAX_BYTES: "${INVOICE_UPLOAD_MAX_BYTES:-20971520}"
+    ports:
+      - "${INVOICE_UPLOAD_PORT:-8088}:8088"
+    volumes:
+      - invoice-bridge-data:/var/lib/invoice-bridge
+      - pricing-catalog-data:/var/lib/pricing-catalog-bridge
+    restart: unless-stopped
+
+volumes:
+  invoice-bridge-data:
+    external: true
+  pricing-catalog-data:
+    external: true

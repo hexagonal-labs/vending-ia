@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: invoice-bridge
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: mcp<2.0,>=1.0
+Requires-Dist: pydantic<3.0,>=2.8
+Requires-Dist: pypdf<7.0,>=5.0
+Provides-Extra: dev
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+Requires-Dist: ruff<1.0,>=0.8; extra == "dev"
+Requires-Dist: mypy<2.0,>=1.13; extra == "dev"

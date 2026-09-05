@@ -1,0 +1,17 @@
+{
+  "contractVersion": "supplier-invoice-ingestion/v1",
+  "providerId": "cashoreca",
+  "invoiceNumber": "SANITIZED-001",
+  "ingestedAt": "2026-09-04T10:05:00Z",
+  "lines": [
+    {
+      "rawDescription": "REFRESCO COLA LATA 330 ML 1*24",
+      "purchaseQuantity": "2",
+      "priceScope": "pack",
+      "packExpression": "1*24",
+      "packPriceNet": "10.51",
+      "lineTotalNet": "21.02",
+      "vatRate": "0.21"
+    }
+  ]
+}

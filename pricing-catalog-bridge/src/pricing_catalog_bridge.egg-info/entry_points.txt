@@ -1,0 +1,2 @@
+[console_scripts]
+pricing-catalog-mcp = pricing_catalog_bridge.interfaces.mcp_server:main

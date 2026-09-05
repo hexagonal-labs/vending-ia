@@ -1,0 +1,2 @@
+[console_scripts]
+invoice-mcp = invoice_bridge.server:main

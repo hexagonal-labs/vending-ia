@@ -1,0 +1,42 @@
+Metadata-Version: 2.4
+Name: pricing-catalog-bridge
+Version: 0.1.0
+Summary: Bridge MCP propietario del catálogo, histórico y Excel de pricing.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: mcp<2.0,>=1.0
+Requires-Dist: pydantic<3.0,>=2.8
+Requires-Dist: rapidfuzz<4.0,>=3.9
+Provides-Extra: dev
+Requires-Dist: mypy<2.0,>=1.13; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+Requires-Dist: ruff<1.0,>=0.8; extra == "dev"
+
+# pricing-catalog-bridge
+
+Servicio MCP independiente que conserva el catálogo local de precios de proveedores.
+
+Es dueño de `pricing-data/`: el índice JSON, los documentos de origen y los Excel
+de catálogo. No consulta Nayax ni proveedores externos y no calcula márgenes.
+
+## Alcance actual
+
+- inicializa las plantillas Excel de catálogo, mappings y reporte;
+- registra snapshots estructurados de proveedores de forma append-only;
+- deduplica por `idempotencyKey` y por hash de contenido;
+- reconstruye el Excel del proveedor desde el índice para mantenerlo auditable;
+- protege las escrituras con bloqueo de proceso y reemplazo atómico.
+- normaliza producto, tamaño y formato antes de hacer matching;
+- confirma por EAN o mapping previamente confirmado y deja los casos fuzzy en revisión.
+
+`match_products` requiere `runId` e `idempotencyKey`. Un tamaño, formato o
+variante contradictoria no se asocia automáticamente.
+
+## Ejecutar
+
+```bash
+python -m pricing_catalog_bridge.interfaces.mcp_server
+```
+
+`PRICING_DATA_DIR` permite cambiar la ubicación de los datos. Por defecto es
+`./pricing-data` desde el directorio de ejecución.

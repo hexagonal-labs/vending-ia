@@ -1,0 +1,237 @@
+# nayax-agents-langgraph
+
+Proyecto Python independiente para los agentes de Nayax usando LangGraph y MCP.
+
+`nayax-agents` sigue siendo el proyecto OpenClaw original y no forma parte de este runtime.
+Este proyecto reutiliza la lógica funcional, pero no depende de OpenClaw.
+
+## Estado actual
+
+Primera iteración implementada:
+
+- scaffold Python con `pyproject.toml`;
+- dominio puro para productos, mappings y cálculo de márgenes;
+- puertos de aplicación para catálogo, proveedor, agente y notificaciones;
+- primer grafo LangGraph de información;
+- workflow LangGraph de márgenes con recopilación paralela y fallback de redacción;
+- integración opcional con LangSmith Studio para inspección y depuración;
+- cliente MCP Python para `nayax-bridge` con allowlist de tools de lectura;
+- adaptador OpenClaw OAuth donde LangGraph mantiene la ejecución de tools;
+- chat CLI como interfaz inicial;
+- tests unitarios del dominio.
+- bridges MCP independientes para proveedores, facturas y catálogo de pricing;
+- comparador que genera un Excel por máquina/proveedor y usa exclusivamente
+  `MachinePrice` como PVP.
+
+## Requisitos
+
+- Python 3.11 o superior;
+- `uv` recomendado (en este entorno se puede usar el Python local de `.tools`);
+- Node.js para ejecutar el servidor MCP de `nayax-bridge`;
+- `nayax-bridge` compilado con `npm run build`;
+- `OPENAI_API_KEY` para el grafo real, o un Gateway OpenClaw configurado para
+  pruebas locales.
+
+## Configuración de `.env`
+
+El proveedor se selecciona con `NAYAX_LLM_PROVIDER`. Solo debes activar una de
+las dos rutas para cada entorno.
+
+### Opción A: OpenClaw OAuth para desarrollo local
+
+Usa el Gateway local de OpenClaw sin guardar su token en este proyecto:
+
+```env
+NAYAX_LLM_PROVIDER=openclaw_gateway
+OPENCLAW_GATEWAY_URL=http://127.0.0.1:18789/v1
+OPENCLAW_GATEWAY_MODEL=openclaw/nayax-langgraph-bridge
+OPENCLAW_GATEWAY_TIMEOUT_SECONDS=120
+```
+
+No rellenes `OPENCLAW_GATEWAY_TOKEN` en `.env`. Los scripts de OpenClaw lo
+leen automáticamente desde `~/.openclaw/openclaw.json`. Es importante que no
+exista una línea `OPENCLAW_GATEWAY_TOKEN=` vacía, porque Studio podría
+sobrescribir el token que inyecta el script.
+
+### Opción B: OpenAI API key para preproducción y producción
+
+```env
+NAYAX_LLM_PROVIDER=openai
+OPENAI_API_KEY=tu_api_key_de_openai
+NAYAX_LLM_MODEL=gpt-5.4-mini
+NAYAX_LLM_TEMPERATURE=0
+NAYAX_LLM_TIMEOUT_SECONDS=30
+```
+
+En esta ruta no se utiliza el Gateway de OpenClaw. LangGraph mantiene la misma
+lógica, tools MCP, cálculos y memoria; solo cambia el proveedor de inteligencia.
+
+La API key de OpenAI debe gestionarse como secreto del entorno y nunca
+commitearse.
+
+## Instalación y arranque
+
+```bash
+uv sync --extra dev
+cp .env.example .env
+uv run pytest
+uv run nayax-chat
+```
+
+## Ejecutar con Docker
+
+Para ejecutar el proyecto sin instalar Python, Node.js ni las dependencias en
+el equipo, consulta [`docs/docker.md`](docs/docker.md). La imagen conjunta
+incluye LangGraph y los bridges de pricing, que se ejecutan mediante MCP por STDIO.
+
+La arquitectura y el procedimiento de facturas, matching y reportes está en
+[`docs/pricing-workflow.md`](docs/pricing-workflow.md).
+
+Si `zsh` no encuentra `uv`, puedes usar el binario local incluido en este
+entorno o añadirlo temporalmente al `PATH`:
+
+```bash
+export PATH="$PWD/.tools/bin:$PATH"
+# alternativa equivalente:
+.tools/bin/uv sync --extra dev
+```
+
+El proyecto incluye `uv.lock` y `.python-version` para reproducir el entorno con Python 3.12.
+
+El chat usa el servidor MCP de `nayax-bridge` por `stdio`. LangGraph carga y
+ejecuta las tools de lectura:
+listar máquinas, listar productos y consultar ventas.
+
+### Ejecutar con OpenClaw OAuth
+
+```bash
+./scripts/run-openclaw-chat.sh --thread-id operador-oauth
+```
+
+Para el informe de márgenes:
+
+```bash
+./scripts/run-openclaw-pricing.sh
+```
+
+Para LangGraph Studio con OpenClaw:
+
+```bash
+./scripts/run-openclaw-studio.sh
+```
+
+Estos scripts leen el token del Gateway local y lo inyectan solo durante la
+ejecución. OpenClaw aporta la inteligencia; `ToolNode`, `nayax-bridge`, las
+tools Nayax, los cálculos y la memoria siguen siendo responsabilidad de
+LangGraph.
+
+### Ejecutar con OpenAI API key
+
+Con `NAYAX_LLM_PROVIDER=openai` y `OPENAI_API_KEY` configurados en `.env`:
+
+```bash
+uv run nayax-chat --thread-id operador-api
+uv run nayax-pricing-report
+uv run --extra studio langgraph dev --no-browser
+```
+
+El cambio entre OpenClaw y OpenAI no requiere modificar el grafo ni la lógica
+de negocio.
+
+La conversación se guarda en SQLite (`data/checkpoints.db`) usando el `thread_id` del chat. Para
+continuar la misma conversación después de reiniciar:
+
+```bash
+uv run nayax-chat --thread-id operador-1
+```
+
+## LangSmith Studio
+
+El proyecto expone dos grafos al Agent Server local: `info` y `pricing`.
+Para instalar el CLI de Studio:
+
+```bash
+uv sync --extra dev --extra studio
+```
+
+Para ver trazas, añade `LANGSMITH_API_KEY` al `.env` junto con:
+
+```env
+LANGSMITH_API_KEY=lsv2_tu_clave_real
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=nayax-agents-langgraph
+```
+
+Después arranca el servidor desde la raíz del proyecto. Usa el script
+correspondiente al proveedor configurado.
+
+Con OpenClaw:
+
+```bash
+./scripts/run-openclaw-studio.sh
+```
+
+Con OpenAI:
+
+```bash
+uv run langgraph dev --no-browser
+```
+
+Después abre la URL de Studio que muestra el comando, normalmente:
+`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`.
+
+Studio usa el checkpointer del Agent Server para sus threads. El comando `nayax-chat`
+continúa usando su SQLite local y no depende de Studio.
+
+En macOS/Safari, si el navegador no permite conectar con `localhost`, usa:
+
+```bash
+uv run langgraph dev --tunnel
+```
+
+El informe de márgenes necesita las credenciales del proveedor en `.env`:
+
+```bash
+uv run nayax-pricing-report                 # OpenAI
+./scripts/run-openclaw-pricing.sh           # OpenClaw OAuth
+```
+
+## Desarrollo con mock Nayax
+
+En una terminal, arranca el mock y asegúrate de que `nayax-bridge/.env` apunta temporalmente al mock,
+o exporta las variables antes de arrancar el proceso MCP:
+
+```bash
+cd ../nayax-mock-server
+node server.mjs
+```
+
+Para una validación local completa, `nayax-bridge` debe estar compilado:
+
+```bash
+cd ../nayax-bridge
+npm run build
+```
+
+Después, desde este proyecto, configura `NAYAX_BRIDGE_DIR` y ejecuta el chat.
+Si el `node` por defecto del shell es antiguo, fija `NAYAX_NODE_COMMAND` a un
+Node.js 20+ (por ejemplo el binario activo de nvm).
+
+## Calidad
+
+```bash
+.venv/bin/ruff check .
+.venv/bin/mypy --no-incremental
+.venv/bin/pytest -q
+```
+
+El checkpointer SQLite usa una allowlist explícita para serializar los tipos
+de dominio del informe. Esto permite activar `LANGGRAPH_STRICT_MSGPACK=true`
+sin aceptar módulos arbitrarios durante la deserialización.
+
+## Principios
+
+- Nayax solo se accede a través de `nayax-bridge` MCP.
+- El LLM no calcula márgenes ni decide reglas de negocio.
+- El dominio no conoce LangGraph, MCP, HTTP ni OpenAI.
+- Telegram será un adaptador opcional; el CLI no depende de él.

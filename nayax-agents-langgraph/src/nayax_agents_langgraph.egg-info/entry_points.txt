@@ -1,0 +1,3 @@
+[console_scripts]
+nayax-chat = nayax_agents.interfaces.cli.chat:main
+nayax-pricing-report = nayax_agents.interfaces.cli.pricing_report:main

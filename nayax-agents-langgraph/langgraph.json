@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "info": "./src/nayax_agents/studio.py:make_info_graph",
+    "pricing": "./src/nayax_agents/studio.py:make_pricing_graph"
+  },
+  "env": ".env"
+}

@@ -1,0 +1,13 @@
+{
+  "contractVersion": "supplier-offer-snapshot/v1",
+  "providerId": "distribuidora-mayorista",
+  "retrievedAt": "2026-09-04T10:00:00Z",
+  "products": [
+    {
+      "supplierProductId": "offer-1101",
+      "name": "Refresco cola lata 330 ml",
+      "unitCostWithTaxAndSurcharge": "0.62",
+      "available": true
+    }
+  ]
+}

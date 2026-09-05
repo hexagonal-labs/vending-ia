@@ -1,0 +1,433 @@
+{
+  "info": {
+    "name": "Nayax Bridge API",
+    "description": "Coleccion para probar la API HTTP de nayax-bridge y llamadas de solo lectura contra Nayax Lynx. Las operaciones de escritura del bridge usan dryRun por defecto; la escritura real esta deshabilitada en esta coleccion.",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Bridge HTTP",
+      "description": "API propia de nayax-bridge. El bridge autentica con x-api-key y llama a Nayax usando el token configurado en su servidor.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/health",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Comprobacion del proceso HTTP. No requiere x-api-key."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Servicio operativo', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List machines",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{viewerApiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/machines",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "machines"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Respuesta con machines', function () { pm.expect(body.machines).to.be.an('array'); });",
+                  "if (!pm.environment.get('machineId') && body.machines?.[0]?.machineId) { pm.environment.set('machineId', String(body.machines[0].machineId)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List machine products",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{viewerApiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/machines/{{machineId}}/products?onlyNeedingRestock=false",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "machines", "{{machineId}}", "products"],
+              "query": [
+                { "key": "onlyNeedingRestock", "value": "false" }
+              ]
+            },
+            "description": "El test guarda el primer machineProductId en el entorno como string, sin convertirlo a number."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Respuesta con products', function () { pm.expect(body.products).to.be.an('array'); });",
+                  "if (body.products?.[0]?.machineProductId) { pm.environment.set('machineProductId', String(body.products[0].machineProductId)); }",
+                  "pm.test('IDs de producto son texto', function () { if (body.products?.length) pm.expect(body.products[0].machineProductId).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{viewerApiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/sales/summary?from={{from}}&to={{to}}&machineId={{machineId}}",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "sales", "summary"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to", "value": "{{to}}" },
+                { "key": "machineId", "value": "{{machineId}}" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de ventas', function () { const body = pm.response.json(); pm.expect(body).to.have.property('from'); pm.expect(body).to.have.property('to'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales by machine",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{viewerApiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/sales/by-machine?from={{from}}&to={{to}}",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "sales", "by-machine"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to", "value": "{{to}}" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta con machines', function () { pm.expect(pm.response.json().machines).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate price update",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "x-api-key", "value": "{{operatorApiKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prices\": {\n    \"card\": {{newPrice}}\n  },\n  \"dryRun\": true,\n  \"confirmLargeChange\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/machines/{{machineId}}/products/{{machineProductId}}/prices",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "machines", "{{machineId}}", "products", "{{machineProductId}}", "prices"]
+            },
+            "description": "Simula y audita el cambio, pero no lo aplica en la maquina."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Es dry-run', function () { pm.expect(pm.response.json().dryRun).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate bulk price update",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-api-key", "value": "{{operatorApiKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"machineId\": {{machineId}},\n      \"machineProductId\": \"{{machineProductId}}\",\n      \"prices\": {\n        \"card\": {{newPrice}}\n      }\n    }\n  ],\n  \"dryRun\": true,\n  \"confirmLargeChange\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/prices/bulk",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "prices", "bulk"]
+            },
+            "description": "Simula una actualizacion en lote sin aplicarla."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de lote', function () { const body = pm.response.json(); pm.expect(body).to.have.property('total'); pm.expect(body).to.have.property('results'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Apply price update (REAL)",
+          "disabled": true,
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "x-api-key", "value": "{{operatorApiKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prices\": {\n    \"card\": {{newPrice}}\n  },\n  \"dryRun\": false,\n  \"confirmLargeChange\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/machines/{{machineId}}/products/{{machineProductId}}/prices",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "machines", "{{machineId}}", "products", "{{machineProductId}}", "prices"]
+            },
+            "description": "PELIGRO: al ejecutarla cambia el precio real. Solo ejecutar tras confirmar la maquina, el producto y el precio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Cambio aplicado', function () { pm.expect(pm.response.json().applied).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{operatorApiKey}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/api/v1/audit",
+              "host": ["{{bridgeBaseUrl}}"],
+              "path": ["api", "v1", "audit"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de auditoria', function () { pm.expect(pm.response.json().entries).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nayax Lynx directo (solo lectura)",
+      "description": "Diagnostico opcional contra Nayax Lynx. Requiere configurar nayaxToken. No incluye PUT de precios para evitar escrituras directas fuera de las salvaguardas del bridge.",
+      "item": [
+        {
+          "name": "List machines (Nayax)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/machines",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "machines"]
+            }
+          }
+        },
+        {
+          "name": "List machine products (Nayax)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/machines/{{machineId}}/machineProducts",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts"]
+            }
+          }
+        },
+        {
+          "name": "Get machine product (Nayax)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/machines/{{machineId}}/machineProducts/{{machineProductId}}",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts", "{{machineProductId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update machine product price (Nayax REAL)",
+          "disabled": true,
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"MachineProductID\": \"{{machineProductId}}\",\n  \"MachineID\": {{machineId}},\n  \"CreditCardPrice\": {{newPrice}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/machines/{{machineId}}/machineProducts/{{machineProductId}}",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts", "{{machineProductId}}"]
+            },
+            "description": "PELIGRO: Nayax no tiene dryRun en esta llamada. Actualiza directamente CreditCardPrice y esta peticion esta deshabilitada por defecto. Activa la peticion solo despues de verificar token, entorno, machineId, machineProductId y precio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nayax acepta la actualizacion', function () { pm.expect(pm.response.code).to.be.oneOf([200, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update machine products map (Nayax REAL)",
+          "disabled": true,
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"MachineProductID\": {{machineProductId}},\n    \"NayaxProductID\": {{nayaxProductId}},\n    \"MachineID\": {{machineId}},\n    \"MDBCode\": 177,\n    \"PAR\": 8,\n    \"CashPrice\": 2.00,\n    \"CreditCardPrice\": 2.10,\n    \"MachinePrice\": {{machinePrice}},\n    \"RetailPrice\": 2.20,\n    \"DEXProductName\": \"DEEEX\",\n    \"PrePaidCardPrice\": 2.30,\n    \"ExternalPrepaidPrice\": 2.40,\n    \"SelectionVendOutBit\": true,\n    \"slow_mover\": false\n  }\n]",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/machines/{{machineId}}/machineProducts?avoidDelete=true",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts"],
+              "query": [
+                { "key": "avoidDelete", "value": "true" }
+              ]
+            },
+            "description": "PELIGRO: actualiza el mapa de productos de la maquina. Nayax espera un array de productos. Esta peticion esta deshabilitada; antes de activarla, sustituye el ejemplo por el mapa completo y actual de la maquina. avoidDelete=true evita borrar los productos omitidos, segun la documentacion de Nayax."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nayax acepta la actualizacion del mapa', function () { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales widget (Nayax)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"screenTypeId\": 1,\n  \"widgetTypeId\": 193,\n  \"entityId\": {{nayaxOperatorId}},\n  \"filters\": [\n    { \"name\": \"startDate\", \"value\": \"{{from}}\", \"type\": \"Date\" },\n    { \"name\": \"endDate\", \"value\": \"{{to}}\", \"type\": \"Date\" },\n    { \"name\": \"groupBy\", \"value\": \"day\", \"type\": \"string\" },\n    { \"name\": \"machineId\", \"value\": \"{{machineId}}\", \"type\": \"string\" }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/dashboard/get-widget-data",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "dashboard", "get-widget-data"]
+            },
+            "description": "Widget de ventas por periodo usado por el adaptador del bridge."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "contractVersion": "nayax-machine-products/v1",
+  "machineId": 5001,
+  "products": [
+    {
+      "machineProductId": "9001",
+      "machineId": 5001,
+      "nayaxProductId": 1101,
+      "name": "Nombre DEX anterior",
+      "catalogProduct": {
+        "productName": "Refresco cola lata 330 ml",
+        "eanCode": "0000000000000"
+      },
+      "prices": {
+        "machine": "1.80",
+        "cash": "1.70"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nayax": {
+      "type": "http",
+      "url": "https://devzone.nayax.com/mcp"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.docker.example
+.git
+.gitignore
+.venv
+.tools
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.langgraph_api
+data
+dist
+node_modules
+*.log
