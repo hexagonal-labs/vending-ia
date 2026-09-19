@@ -10,6 +10,9 @@ describe('contrato de productos de máquina para MCP', () => {
         MachineID: 5001,
         NayaxProductID: 1101,
         DEXProductName: 'Agua mineral 50 cl',
+        PAR: 8,
+        MissingStockByMDB: 1,
+        MDBMissingStockLastUpdated: '2026-09-18T23:34:53.723',
         MachinePrice: 1.8,
         CashPrice: 1.7,
       }),
@@ -19,7 +22,20 @@ describe('contrato de productos de máquina para MCP', () => {
       contractVersion: 'nayax-machine-products/v1',
       machineId: 5001,
       count: 1,
-      products: [{ prices: { machine: 1.8, cash: 1.7 } }],
+      products: [
+        {
+          prices: { machine: 1.8, cash: 1.7 },
+          stock: {
+            par: 8,
+            available: 7,
+            missing: 1,
+            status: 'partial',
+            source: 'mdb',
+            updatedAt: '2026-09-18T23:34:53.723',
+          },
+          needsRestock: true,
+        },
+      ],
     });
   });
 });

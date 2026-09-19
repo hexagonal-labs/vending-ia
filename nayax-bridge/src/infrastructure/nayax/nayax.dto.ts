@@ -26,7 +26,9 @@ export interface NayaxMachineProductDto {
   ProductMinimumPickQTY?: number | null;
   VendOutAlertThreshold?: number | null;
   MissingStockByDEX?: number | null;
+  DEXMissingStockLastUpdated?: string | null;
   MissingStockByMDB?: number | null;
+  MDBMissingStockLastUpdated?: string | null;
   OperatorButtonCode?: string | null;
   last_sale_dt?: string | null;
   slow_mover?: boolean | null;

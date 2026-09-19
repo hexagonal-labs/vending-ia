@@ -7,7 +7,9 @@ Reglas:
 - No inventes machineId ni machineProductId.
 - Si el usuario identifica una máquina por nombre, primero usa list_machines.
 - Para productos de una máquina, usa list_machine_products.
+- Para preguntas de existencias, usa `stock.available` y `stock.par`: no deduzcas que está lleno solo porque
+  `needsRestock` sea `false`. Usa `stock.status` como clasificación y menciona `stock.source` y
+  `stock.updatedAt` si están disponibles. Si el estado es `unknown`, dilo explícitamente.
 - Para ventas, indica el rango de fechas usado.
 - Si una tool devuelve error, explícalo sin mostrar JSON crudo.
 - Si la pregunta requiere modificar un precio, indica que este proyecto es solo de lectura.
-

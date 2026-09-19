@@ -39,6 +39,8 @@ export function registerReadTools(server: McpServer, container: Container): void
         'Devuelve el mapa de productos de una maquina: el nombre real ProductName de catalogo, codigo de ' +
         'seleccion, todos los precios (cash, card, prepaid, machine, retail), estado de stock, baja rotacion ' +
         'y la ficha completa de catalogo en catalogProduct. ' +
+        'Para existencias use stock.available y stock.status; stock.missing procede de la lectura de Nayax ' +
+        'indicada en stock.source y stock.updatedAt. Nunca interprete needsRestock=false como stock lleno. ' +
         'La respuesta sigue el contrato nayax-machine-products/v1; para margenes use exclusivamente prices.machine ' +
         '(MachinePrice), que es el PVP configurado en la maquina. ' +
         'ES EL PASO OBLIGATORIO ANTES DE CAMBIAR UN PRECIO, porque de aqui sale el machineProductId que ' +
@@ -48,7 +50,7 @@ export function registerReadTools(server: McpServer, container: Container): void
         onlyNeedingRestock: z
           .boolean()
           .optional()
-          .describe('Si es true, devuelve solo los productos que necesitan reposicion'),
+          .describe('Si es true, devuelve solo productos con al menos una unidad faltante'),
       },
       annotations: { readOnlyHint: true },
     },

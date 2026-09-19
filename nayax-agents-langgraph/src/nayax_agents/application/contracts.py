@@ -31,6 +31,23 @@ class NayaxProductPricesV1(ContractModel):
     cash: Decimal | None = None
 
 
+class NayaxStockReadingV1(ContractModel):
+    missing: int | None = None
+    updated_at: datetime | None = Field(default=None, alias="updatedAt")
+
+
+class NayaxProductStockV1(ContractModel):
+    par: int | None = None
+    available: int | None = None
+    missing: int | None = None
+    alert_threshold: int | None = Field(default=None, alias="alertThreshold")
+    at_or_above_alert_threshold: bool | None = Field(default=None, alias="atOrAboveAlertThreshold")
+    status: Literal["full", "partial", "empty", "unknown"] | None = None
+    source: Literal["dex", "mdb"] | None = None
+    updated_at: datetime | None = Field(default=None, alias="updatedAt")
+    readings: dict[str, NayaxStockReadingV1] | None = None
+
+
 class NayaxMachineProductV1(ContractModel):
     machine_product_id: str = Field(alias="machineProductId")
     machine_id: int = Field(alias="machineId")
@@ -38,6 +55,8 @@ class NayaxMachineProductV1(ContractModel):
     name: str = ""
     catalog_product: NayaxCatalogProductV1 | None = Field(default=None, alias="catalogProduct")
     prices: NayaxProductPricesV1
+    stock: NayaxProductStockV1 | None = None
+    needs_restock: bool | None = Field(default=None, alias="needsRestock")
 
 
 class NayaxMachineProductsResponseV1(ContractModel):

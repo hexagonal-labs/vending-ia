@@ -19,7 +19,20 @@ export interface MachineProductView {
   catalogProduct: CatalogProduct | null;
   selectionCode: string | null;
   prices: Record<string, number>;
-  stock: { par: number | null; missing: number | null; alertThreshold: number | null };
+  stock: {
+    par: number | null;
+    available: number | null;
+    missing: number | null;
+    alertThreshold: number | null;
+    atOrAboveAlertThreshold: boolean | null;
+    status: 'full' | 'partial' | 'empty' | 'unknown';
+    source: 'dex' | 'mdb' | null;
+    updatedAt: string | null;
+    readings: {
+      dex: { missing: number | null; updatedAt: string | null };
+      mdb: { missing: number | null; updatedAt: string | null };
+    };
+  };
   needsRestock: boolean;
   slowMover: boolean;
   lastSaleAt: string | null;
@@ -36,13 +49,44 @@ export function presentMachineProduct(product: MachineProduct): MachineProductVi
     prices: product.pricing.toDecimals() as Record<string, number>,
     stock: {
       par: product.stock.par,
+      available: availableStock(product),
       missing: product.stock.missing,
       alertThreshold: product.stock.alertThreshold,
+      atOrAboveAlertThreshold: isAtOrAboveAlertThreshold(product),
+      status: stockStatus(product),
+      source: product.stock.source ?? null,
+      updatedAt: product.stock.updatedAt ?? null,
+      readings: product.stock.readings ?? {
+        dex: { missing: null, updatedAt: null },
+        mdb: { missing: null, updatedAt: null },
+      },
     },
     needsRestock: needsRestock(product),
     slowMover: product.slowMover,
     lastSaleAt: product.lastSaleAt,
   };
+}
+
+function availableStock(product: MachineProduct): number | null {
+  if (product.stock.available !== undefined) return product.stock.available;
+  const { par, missing } = product.stock;
+  if (par === null || missing === null) return null;
+  return Math.max(0, par - missing);
+}
+
+function isAtOrAboveAlertThreshold(product: MachineProduct): boolean | null {
+  const { missing, alertThreshold } = product.stock;
+  if (missing === null || alertThreshold === null) return null;
+  return missing >= alertThreshold;
+}
+
+function stockStatus(product: MachineProduct): 'full' | 'partial' | 'empty' | 'unknown' {
+  const available = availableStock(product);
+  const { par, missing } = product.stock;
+  if (par === null || missing === null || available === null) return 'unknown';
+  if (missing === 0) return 'full';
+  if (available === 0) return 'empty';
+  return 'partial';
 }
 
 export function presentMachine(machine: Machine): Record<string, unknown> {

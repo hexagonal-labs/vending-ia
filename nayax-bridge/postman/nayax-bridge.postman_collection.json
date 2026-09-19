@@ -317,7 +317,50 @@
               "host": ["{{nayaxBaseUrl}}"],
               "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nayax devuelve una lista', function () { pm.expect(pm.response.json()).to.be.an('array'); });",
+                  "const products = pm.response.json();",
+                  "const product = products.find((item) => item.NayaxProductID || item.ProductRef);",
+                  "const productId = product?.NayaxProductID ?? String(product?.ProductRef ?? '').match(/(?:^|\\/)products\\/(\\d+)\\/?$/i)?.[1];",
+                  "if (productId) { pm.environment.set('nayaxProductId', String(productId)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get catalog product detail (Nayax)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/products/{{nayaxProductId}}",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "products", "{{nayaxProductId}}"]
+            },
+            "description": "Ficha maestra usada por nayax-bridge para enriquecer cada producto de máquina. El ID se toma de NayaxProductID o de ProductRef (por ejemplo, v1/products/243115947215801)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de ficha de producto', function () { pm.expect(pm.response.json()).to.be.an('object'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get machine product (Nayax)",
@@ -333,6 +376,42 @@
               "path": ["{{nayaxApiPrefix}}", "machines", "{{machineId}}", "machineProducts", "{{machineProductId}}"]
             }
           }
+        },
+        {
+          "name": "Update catalog product name (Nayax REAL)",
+          "disabled": true,
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{nayaxToken}}", "type": "text" },
+              { "key": "Accept", "value": "application/json", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NayaxProductID\": {{nayaxProductId}},\n  \"ProductName\": \"{{newProductName}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{nayaxBaseUrl}}{{nayaxApiPrefix}}/products/{{nayaxProductId}}",
+              "host": ["{{nayaxBaseUrl}}"],
+              "path": ["{{nayaxApiPrefix}}", "products", "{{nayaxProductId}}"]
+            },
+            "description": "PELIGRO: actualiza el ProductName del producto maestro Nayax y puede afectar a todas las máquinas que lo referencian. Está deshabilitada por defecto. Consulta antes Get catalog product detail (Nayax), verifica nayaxProductId y activa la petición solo para aplicar el cambio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nayax actualiza el producto', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('ProductName actualizado', function () { pm.expect(body.ProductName).to.eql(pm.environment.get('newProductName')); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Update machine product price (Nayax REAL)",

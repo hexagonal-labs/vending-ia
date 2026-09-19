@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toCatalogProduct, toMachineProduct } from '../../../src/infrastructure/nayax/nayax.mappers.js';
+import { needsRestock } from '../../../src/domain/product/machine-product.js';
 import { machineProductIdSchema } from '../../../src/shared/schemas.js';
 
 const LARGE_MACHINE_PRODUCT_ID = '62815040066753839';
@@ -41,5 +42,41 @@ describe('identificadores de productos Nayax', () => {
       productDescription: 'Descripcion completa',
       productPictureUrl: 'https://example.test/product.jpg',
     });
+  });
+
+  it('elige la lectura de stock más reciente y conserva las dos fuentes', () => {
+    const product = toMachineProduct({
+      MachineProductID: '178561114546281',
+      MachineID: 236561482,
+      PAR: 8,
+      MissingStockByDEX: 0,
+      DEXMissingStockLastUpdated: '2025-01-10T18:02:39.053',
+      MissingStockByMDB: 1,
+      MDBMissingStockLastUpdated: '2026-09-18T23:34:53.723',
+    });
+
+    expect(product.stock).toMatchObject({
+      par: 8,
+      available: 7,
+      missing: 1,
+      source: 'mdb',
+      updatedAt: '2026-09-18T23:34:53.723',
+      readings: {
+        dex: { missing: 0, updatedAt: '2025-01-10T18:02:39.053' },
+        mdb: { missing: 1, updatedAt: '2026-09-18T23:34:53.723' },
+      },
+    });
+    expect(needsRestock(product)).toBe(true);
+  });
+
+  it('usa MDB como desempate cuando Nayax no informa fechas', () => {
+    const product = toMachineProduct({
+      MachineProductID: '2',
+      MachineID: 5001,
+      MissingStockByDEX: 0,
+      MissingStockByMDB: 2,
+    });
+
+    expect(product.stock).toMatchObject({ missing: 2, source: 'mdb' });
   });
 });

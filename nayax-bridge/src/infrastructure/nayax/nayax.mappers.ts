@@ -27,6 +27,7 @@ export function toMachineProduct(
 ): MachineProduct {
   const rawMachineProductId = dto.MachineProductID ?? 0;
   const rawMachineId = dto.MachineID ?? 0;
+  const stock = selectStockReading(dto);
 
   return {
     machineProductId: machineProductId(rawMachineProductId),
@@ -48,12 +49,83 @@ export function toMachineProduct(
     }),
     stock: {
       par: dto.PAR ?? null,
-      missing: dto.MissingStockByDEX ?? dto.MissingStockByMDB ?? null,
+      available: availableStock(dto.PAR, stock.missing),
+      missing: stock.missing,
       alertThreshold: dto.VendOutAlertThreshold ?? null,
+      source: stock.source,
+      updatedAt: stock.updatedAt,
+      readings: {
+        dex: {
+          missing: dto.MissingStockByDEX ?? null,
+          updatedAt: dto.DEXMissingStockLastUpdated ?? null,
+        },
+        mdb: {
+          missing: dto.MissingStockByMDB ?? null,
+          updatedAt: dto.MDBMissingStockLastUpdated ?? null,
+        },
+      },
     },
     lastSaleAt: dto.last_sale_dt ?? null,
     slowMover: dto.slow_mover ?? false,
   };
+}
+
+type StockSource = 'dex' | 'mdb';
+
+interface SelectedStockReading {
+  readonly source: StockSource | null;
+  readonly missing: number | null;
+  readonly updatedAt: string | null;
+}
+
+/**
+ * Nayax puede devolver dos lecturas de faltantes: DEX y MDB. No se debe elegir
+ * una por su mera presencia (0 también es un valor): usamos la lectura con
+ * fecha válida más reciente. Cuando faltan las fechas o empatan, MDB gana por
+ * ser la señal directa del bus de la máquina.
+ */
+function selectStockReading(dto: NayaxMachineProductDto): SelectedStockReading {
+  const candidates: Array<SelectedStockReading & { readonly timestamp: number | null }> = [
+    {
+      source: 'mdb' as const,
+      missing: dto.MissingStockByMDB ?? null,
+      updatedAt: dto.MDBMissingStockLastUpdated ?? null,
+      timestamp: timestampOf(dto.MDBMissingStockLastUpdated),
+    },
+    {
+      source: 'dex' as const,
+      missing: dto.MissingStockByDEX ?? null,
+      updatedAt: dto.DEXMissingStockLastUpdated ?? null,
+      timestamp: timestampOf(dto.DEXMissingStockLastUpdated),
+    },
+  ].filter((candidate) => candidate.missing !== null);
+
+  if (candidates.length === 0) return { source: null, missing: null, updatedAt: null };
+
+  candidates.sort((left, right) => {
+    if (left.timestamp === null && right.timestamp === null) return 0;
+    if (left.timestamp === null) return 1;
+    if (right.timestamp === null) return -1;
+    return right.timestamp - left.timestamp;
+  });
+
+  const selected = candidates[0]!;
+  return {
+    source: selected.source,
+    missing: selected.missing,
+    updatedAt: selected.updatedAt,
+  };
+}
+
+function timestampOf(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function availableStock(par: number | null | undefined, missing: number | null): number | null {
+  if (par === null || par === undefined || missing === null) return null;
+  return Math.max(0, par - missing);
 }
 
 export function toCatalogProduct(dto: NayaxProductDto): CatalogProduct {
