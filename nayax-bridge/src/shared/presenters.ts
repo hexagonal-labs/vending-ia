@@ -24,14 +24,10 @@ export interface MachineProductView {
     available: number | null;
     missing: number | null;
     alertThreshold: number | null;
-    atOrAboveAlertThreshold: boolean | null;
+    atOrBelowAlertThreshold: boolean | null;
     status: 'full' | 'partial' | 'empty' | 'unknown';
-    source: 'dex' | 'mdb' | null;
+    source: 'mdb' | null;
     updatedAt: string | null;
-    readings: {
-      dex: { missing: number | null; updatedAt: string | null };
-      mdb: { missing: number | null; updatedAt: string | null };
-    };
   };
   needsRestock: boolean;
   slowMover: boolean;
@@ -52,14 +48,10 @@ export function presentMachineProduct(product: MachineProduct): MachineProductVi
       available: availableStock(product),
       missing: product.stock.missing,
       alertThreshold: product.stock.alertThreshold,
-      atOrAboveAlertThreshold: isAtOrAboveAlertThreshold(product),
+      atOrBelowAlertThreshold: isAtOrBelowAlertThreshold(product),
       status: stockStatus(product),
       source: product.stock.source ?? null,
       updatedAt: product.stock.updatedAt ?? null,
-      readings: product.stock.readings ?? {
-        dex: { missing: null, updatedAt: null },
-        mdb: { missing: null, updatedAt: null },
-      },
     },
     needsRestock: needsRestock(product),
     slowMover: product.slowMover,
@@ -74,10 +66,11 @@ function availableStock(product: MachineProduct): number | null {
   return Math.max(0, par - missing);
 }
 
-function isAtOrAboveAlertThreshold(product: MachineProduct): boolean | null {
-  const { missing, alertThreshold } = product.stock;
-  if (missing === null || alertThreshold === null) return null;
-  return missing >= alertThreshold;
+function isAtOrBelowAlertThreshold(product: MachineProduct): boolean | null {
+  const available = availableStock(product);
+  const { alertThreshold } = product.stock;
+  if (available === null || alertThreshold === null) return null;
+  return available <= alertThreshold;
 }
 
 function stockStatus(product: MachineProduct): 'full' | 'partial' | 'empty' | 'unknown' {

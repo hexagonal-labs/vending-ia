@@ -44,15 +44,16 @@ describe('identificadores de productos Nayax', () => {
     });
   });
 
-  it('elige la lectura de stock más reciente y conserva las dos fuentes', () => {
+  it('usa exclusivamente MDB para calcular el stock, aunque DEX sea más reciente', () => {
     const product = toMachineProduct({
       MachineProductID: '178561114546281',
       MachineID: 236561482,
       PAR: 8,
       MissingStockByDEX: 0,
-      DEXMissingStockLastUpdated: '2025-01-10T18:02:39.053',
+      DEXMissingStockLastUpdated: '2030-01-10T18:02:39.053',
       MissingStockByMDB: 1,
       MDBMissingStockLastUpdated: '2026-09-18T23:34:53.723',
+      VendOutAlertThreshold: 7,
     });
 
     expect(product.stock).toMatchObject({
@@ -61,22 +62,21 @@ describe('identificadores de productos Nayax', () => {
       missing: 1,
       source: 'mdb',
       updatedAt: '2026-09-18T23:34:53.723',
-      readings: {
-        dex: { missing: 0, updatedAt: '2025-01-10T18:02:39.053' },
-        mdb: { missing: 1, updatedAt: '2026-09-18T23:34:53.723' },
-      },
     });
     expect(needsRestock(product)).toBe(true);
   });
 
-  it('usa MDB como desempate cuando Nayax no informa fechas', () => {
+  it('marca reposición solo al llegar al umbral MDB configurado', () => {
     const product = toMachineProduct({
       MachineProductID: '2',
       MachineID: 5001,
+      PAR: 8,
       MissingStockByDEX: 0,
       MissingStockByMDB: 2,
+      VendOutAlertThreshold: 6,
     });
 
-    expect(product.stock).toMatchObject({ missing: 2, source: 'mdb' });
+    expect(product.stock).toMatchObject({ available: 6, missing: 2, source: 'mdb' });
+    expect(needsRestock(product)).toBe(true);
   });
 });

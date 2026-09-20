@@ -67,29 +67,18 @@ export interface StockInfo {
   readonly par: number | null;
   /** Unidades disponibles estimadas: PAR - missing. */
   readonly available?: number | null;
-  /** Faltantes de la fuente de telemetría seleccionada. */
+  /** Faltantes según la telemetría MDB de la máquina. */
   readonly missing: number | null;
   readonly alertThreshold: number | null;
-  /** Fuente elegida por tener la lectura más reciente; MDB gana si no hay fecha. */
-  readonly source?: 'dex' | 'mdb' | null;
+  /** La lógica de inventario usa exclusivamente MDB. */
+  readonly source?: 'mdb' | null;
   readonly updatedAt?: string | null;
-  /** Lecturas originales, expuestas para poder auditar discrepancias de Nayax. */
-  readonly readings?: {
-    readonly dex: StockReading;
-    readonly mdb: StockReading;
-  };
 }
 
-export interface StockReading {
-  readonly missing: number | null;
-  readonly updatedAt: string | null;
-}
-
-/** Un producto necesita reposición cuando la telemetría indica alguna unidad faltante.
- *
- * El umbral de alerta es una configuración opcional de Nayax; no tenerlo no
- * convierte una selección parcialmente vacía en una selección llena.
- */
+/** Un producto necesita reposición si el stock MDB llega al umbral configurado. */
 export function needsRestock(product: MachineProduct): boolean {
-  return (product.stock.missing ?? 0) > 0;
+  const { par, missing, alertThreshold } = product.stock;
+  if (par === null || missing === null || alertThreshold === null) return false;
+  const available = product.stock.available ?? Math.max(0, par - missing);
+  return available <= alertThreshold;
 }
